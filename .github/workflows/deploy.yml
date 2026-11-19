@@ -18,10 +18,10 @@ jobs:
 
       - name: Download standalone PiCas app
         run: |
-          curl -fsSL -o index.html https://dpaste.org/teSzc/raw
-          echo 'Downloaded bytes:'
+          if [ ! -f index.html ]; then
+            curl -fsSL -o index.html https://dpaste.org/teSzc/raw
+          fi
           wc -c index.html
-          head -c 15 index.html
 
       - name: Enable GitHub Pages via API
         env:
@@ -33,17 +33,23 @@ jobs:
             https://api.github.com/repos/hzs-max/picas/pages \
             -d '{"source":{"branch":"main","path":"/"}}')
           echo "Pages API response code: $http_code"
-          cat /tmp/pages_resp || true
-          if [ "$http_code" = "201" ] || [ "$http_code" = "200" ] || [ "$http_code" = "409" ]; then
-            echo 'Pages enabled or already enabled'
-          else
-            echo 'Unexpected response, continuing anyway'
+          cp /tmp/pages_resp pages-response.txt
+          echo "" >> pages-response.txt
+          echo "HTTP_CODE=$http_code" >> pages-response.txt
+          if [ "$http_code" != "201" ] && [ "$http_code" != "200" ] && [ "$http_code" != "409" ]; then
+            echo "Pages enable failed; saving diagnostic to repo"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pages-response.txt
+            git commit -m "Add Pages API diagnostic response"
+            git push
+            exit 1
           fi
 
-      - name: Commit index.html
+      - name: Commit files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html
-          git commit -m "Add PiCas standalone index.html" || echo "No changes to commit"
+          git add index.html pages-response.txt
+          git commit -m "Update PiCas and Pages response record" || echo "No changes to commit"
           git push
